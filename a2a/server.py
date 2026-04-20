@@ -13,6 +13,8 @@ Run:
 from __future__ import annotations
 import asyncio
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

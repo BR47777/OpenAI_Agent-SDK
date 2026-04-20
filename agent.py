@@ -1,51 +1,68 @@
 """
 Code Review & Auto-Fix Agent
-Uses OpenAI Agents SDK sandbox to inspect, fix, run, and report on Python code.
+Demonstrates: Skills capability, AGENTS.md custom instructions, Shell code execution.
 
 Usage:
-    export OPENAI_API_KEY=sk-...
     python agent.py
 """
 
 import asyncio
-import tempfile
-import shutil
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 from agents import Runner
 from agents.run import RunConfig
 from agents.sandbox import Manifest, SandboxAgent, SandboxRunConfig
+from agents.sandbox.capabilities import Shell, Skills
+from agents.sandbox.capabilities.compaction import Compaction
+from agents.sandbox.capabilities.skills import Skill
 from agents.sandbox.entries import LocalDir
 from agents.sandbox.sandboxes import UnixLocalSandboxClient
 
-from skills.file_inspector import list_python_files, count_lines
-from skills.security_scanner import scan_for_security_issues
-from skills.report_writer import write_report
+
+def _load_skill(name: str) -> Skill:
+    """Load a Skill from its SKILL.md file in skills/skill_docs/."""
+    content = (Path("skills/skill_docs") / f"{name}.md").read_text()
+    return Skill(name=name, description=_parse_description(content), content=content)
+
+
+def _parse_description(md: str) -> str:
+    """Extract the description from YAML frontmatter."""
+    for line in md.splitlines():
+        if line.startswith("description:"):
+            return line.split(":", 1)[1].strip()
+    return "No description."
+
 
 TASK = """
-You are reviewing the Python project mounted at data/src/.
-
-Steps:
-1. Use list_python_files to discover all .py files under data/src/
-2. Use count_lines on each file for a quick size overview
-3. Use scan_for_security_issues on each file to pre-flag security patterns
-4. Read each file fully and identify ALL bugs (logic, security, style, resource leaks)
-5. For each bug: apply a fix using apply_patch, then verify with shell
-6. Use write_report to save your full findings to data/output/review_report.md
-7. Print a one-paragraph executive summary at the end
+Read AGENTS.md for your full workflow instructions, then begin the code review.
+Your skills are available under .agents/ — read each SKILL.md before executing its steps.
 """
 
 
 async def main() -> None:
-    src = Path("sample_project/src").resolve()
+    src    = Path("sample_project/src").resolve()
     output = Path("sample_project/output").resolve()
     output.mkdir(exist_ok=True)
 
+    # Load all four SDK-native Skills from their SKILL.md files
+    skills = Skills(skills=[
+        _load_skill("file_inspector"),
+        _load_skill("security_scanner"),
+        _load_skill("code_fixer"),
+        _load_skill("report_writer"),
+    ])
+
     agent = SandboxAgent(
         name="CodeReviewAgent",
-        model="gpt-4o",
-        instructions=Path("AGENTS.md").read_text(),
-        tools=[list_python_files, count_lines, scan_for_security_issues, write_report],
+        model="gpt-4o-mini",
+        instructions=Path("AGENTS.md").read_text(),   # custom instructions via AGENTS.md
+        capabilities=[
+            skills,          # Skills: mounts .agents/<name>/SKILL.md inside sandbox
+            Shell(),         # Shell: exec_command tool for code execution
+            Compaction(),    # Compaction: context window management for long tasks
+        ],
         default_manifest=Manifest(
             entries={
                 "data/src":    LocalDir(src=src),
@@ -53,6 +70,11 @@ async def main() -> None:
             }
         ),
     )
+
+    print(f"Agent: {agent.name}")
+    print(f"Capabilities: {[type(c).__name__ for c in agent.capabilities]}")
+    print(f"Skills mounted: {[s.name for s in skills.skills]}")
+    print("Running...\n")
 
     result = await Runner.run(
         agent,
@@ -66,10 +88,6 @@ async def main() -> None:
     print("EXECUTIVE SUMMARY")
     print("=" * 60)
     print(result.final_output)
-
-    report = output / "review_report.md"
-    if report.exists():
-        print(f"\nFull report saved → {report}")
 
 
 if __name__ == "__main__":

@@ -11,15 +11,23 @@ from pathlib import Path
 from a2a.types import Task, TaskState, Message
 from a2a.task_store import store
 
-from skills.file_inspector import list_python_files, count_lines
-from skills.security_scanner import scan_for_security_issues
-from skills.report_writer import write_report
 
 
 def _build_agent(output_dir: Path):
     """Build SandboxAgent — import deferred so tests can mock OPENAI_API_KEY."""
     from agents.sandbox import Manifest, SandboxAgent
     from agents.sandbox.entries import LocalDir
+    from agents.sandbox.capabilities import Shell, Skills
+    from agents.sandbox.capabilities.compaction import Compaction
+    from agents.sandbox.capabilities.skills import Skill
+
+    def _load_skill(name: str) -> Skill:
+        content = (Path("skills/skill_docs") / f"{name}.md").read_text()
+        desc = next(
+            (l.split(":", 1)[1].strip() for l in content.splitlines() if l.startswith("description:")),
+            "No description."
+        )
+        return Skill(name=name, description=desc, content=content)
 
     src = Path("sample_project/src").resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -28,7 +36,11 @@ def _build_agent(output_dir: Path):
         name="CodeReviewAgent",
         model="gpt-4o",
         instructions=Path("AGENTS.md").read_text(),
-        tools=[list_python_files, count_lines, scan_for_security_issues, write_report],
+        capabilities=[
+            Skills(skills=[_load_skill(n) for n in ("file_inspector", "security_scanner", "code_fixer", "report_writer")]),
+            Shell(),
+            Compaction(),
+        ],
         default_manifest=Manifest(
             entries={
                 "data/src":    LocalDir(src=src),
