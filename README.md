@@ -4,6 +4,7 @@ An AI-powered code review agent built on the **OpenAI Agents SDK (≥0.14.0)** t
 
 Exposes the agent as an **A2A (Agent-to-Agent) protocol** HTTP service for multi-agent interoperability.
 
+https://openai.com/index/the-next-evolution-of-the-agents-sdk/
 ---
 
 ## Table of Contents
