@@ -1,6 +1,7 @@
 # OpenAI Agent SDK — Code Review & Auto-Fix Agent
 
 An AI-powered code review agent built on the **OpenAI Agents SDK (≥0.14.0)** that inspects Python source files, detects bugs and security vulnerabilities, applies fixes, verifies them by executing the code, and produces a structured markdown report — all inside an isolated sandbox.
+![Uploading generated-image (3).png…]()
 
 Exposes the agent as an **A2A (Agent-to-Agent) protocol** HTTP service for multi-agent interoperability.
 
